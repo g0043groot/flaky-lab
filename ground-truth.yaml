@@ -1,0 +1,158 @@
+# Answer key for the flaky-lab Tier-1 planted repo.
+# `expected_fail_rate` is the *design target* for sequential (non-parallel) runs in the default matrix
+# unless the triggering condition says otherwise. Empirical measurements are in `measured_*` fields.
+# Test names are fully qualified: <class>.<method>. IDs are also in @Tag and @DisplayName.
+# Matrix legs: seed (random order) x TZ {UTC, Asia/Kolkata, America/New_York} x parallel {on, off};
+# env FLAKY_LAB_EXPRESS_SHIPPING=enabled on only salt=1 legs (CI) / half of the local legs.
+
+version: 1
+repo: flaky-lab
+stable_tests: "every test not listed below (44 tests) - must never fail in any leg"
+
+flaky:
+  - id: F01
+    tests: [com.example.orders.flaky.AsyncRaceTest.f01_asyncJobDoneAfterFixedWait]
+    category: timing
+    mechanism: "AsyncJobRunner job sleeps uniform 80-120 ms; test sleeps a fixed 108 ms then asserts DONE"
+    expected_fail_rate: 0.30
+    triggering_condition: "job duration > wait (race); more likely under parallel/loaded CI"
+  - id: F02
+    tests: [com.example.orders.flaky.AsyncRaceTest.f02_asyncJobDoneAfterGenerousWait]
+    category: timing_rare
+    mechanism: "Same race as F01 but fixed wait 121 ms (job max 120 ms; only scheduler jitter loses)"
+    expected_fail_rate: 0.03
+    triggering_condition: "job duration lands in the last ~2 ms of its 80-120 range, or scheduler jitter"
+  - id: F03
+    role: victim
+    tests: [com.example.orders.flaky.TenantReportTest.f03_reportUsesTenantFromEarlierTest]
+    helper_tests_that_always_pass: [com.example.orders.flaky.TenantSetupTest.f03_helper_registersTenant]
+    category: order_dependent
+    mechanism: "Asserts static TestFixtures.tenant == 'acme', which is only set by the helper test"
+    expected_fail_rate: "~0.5 under random class order (0 in orders where the setter runs first)"
+    triggering_condition: "victim runs before TenantSetupTest (depends on random-order seed; deterministic per seed when not parallel)"
+  - id: F04
+    role: polluter
+    tests: [com.example.orders.flaky.PromoCodeTest.f04_polluter_enablesPromoAndNeverResets]
+    polluter_itself_fails: false
+    victim_tests_that_fail: [com.example.orders.flaky.CheckoutPriceTest.f04_victim_priceWithoutPromo]
+    category: order_dependent
+    mechanism: "Polluter leaves static TestFixtures.promoPercent=50; victim assumes 0"
+    expected_fail_rate: "victim ~0.5 under random class order; polluter itself 0"
+    triggering_condition: "polluter runs before victim"
+  - id: F05
+    tests: [com.example.orders.flaky.SharedCacheTest.f05_firstLookupOfSku42IsCacheMiss]
+    helper_tests_that_always_pass: [com.example.orders.flaky.CatalogWarmupTest.f05_helper_warmsSharedCache]
+    category: shared_state
+    mechanism: "Static ProductCache.shared() (100 ms TTL) is never cleared; test expects sku-42 to be a miss"
+    expected_fail_rate: 0.15
+    triggering_condition: "CatalogWarmupTest ran within 100 ms before the victim (random order + parallel)"
+  - id: F06
+    tests: [com.example.orders.flaky.ConcurrentCounterTest.f06_counterIsExactUnderEightThreads]
+    category: concurrency
+    mechanism: "OrderStats.recordOrder() is an unsynchronised int++; 8 threads x 250 increments lose updates"
+    expected_fail_rate: 0.20
+    triggering_condition: "lost update (data race); depends on core count / scheduling"
+  - id: F07
+    tests: [com.example.orders.flaky.IterationOrderTest.f07_hashSetIteratesInInsertionOrder]
+    category: iteration_order
+    mechanism: "HashSet of two objects with identity hashCode; asserts insertion order"
+    expected_fail_rate: 0.47
+    triggering_condition: "identity hashes put the two objects in reverse bucket order"
+  - id: F08
+    tests: [com.example.orders.flaky.ClockDependentTest.f08_orderDeadlineStaysInSameMinute]
+    category: time_dependent
+    mechanism: "Asserts createdAt and createdAt+5s fall in the same wall-clock minute"
+    expected_fail_rate: 0.083
+    triggering_condition: "test executes in seconds :55-:59 of a minute (5/60)"
+  - id: F09
+    tests: [com.example.orders.flaky.ClockDependentTest.f09_orderDayMatchesUtcDate]
+    category: timezone_dependent
+    mechanism: "OrderDates.dayOf uses JVM default zone; asserts UTC calendar dates (checks one instant that breaks west of UTC, one that breaks east)"
+    expected_fail_rate: "0 when TZ=UTC; 1.0 when TZ is Asia/Kolkata or America/New_York"
+    triggering_condition: "JVM default timezone != UTC (matrix TZ leg)"
+  - id: F10
+    tests: [com.example.orders.flaky.RandomnessTest.f10_rollIsAtLeastFivePercent]
+    category: randomness
+    mechanism: "Unseeded java.util.Random; asserts roll >= 0.05"
+    expected_fail_rate: 0.05
+    triggering_condition: "roll < 0.05"
+  - id: F11
+    tests: [com.example.orders.flaky.PaymentLatencyTest.f11_authorizeSucceedsDespiteRandomLatency]
+    category: network
+    mechanism: "WireMock stub with uniform(100,460) ms random delay vs PaymentClient 500 ms timeout"
+    expected_fail_rate: 0.10
+    triggering_condition: "stub delay (+ overhead) exceeds 500 ms"
+  - id: F12
+    tests:
+      - com.example.orders.flaky.FixedPortTest.f12_bindsFixedPort_a
+      - com.example.orders.flaky.FixedPortTest.f12_bindsFixedPort_b
+    note: "two sibling methods share ID F12 (one needs a partner to collide with); whichever binds second fails"
+    category: resource
+    mechanism: "Both bind hard-coded port 18765 and hold it ~150 ms"
+    expected_fail_rate: "0 when parallel=off; high when parallel=on"
+    triggering_condition: "JUnit parallel execution (matrix parallel=on)"
+  - id: F13
+    tests:
+      - com.example.orders.flaky.FixedTempFileTest.f13_fixedTempFile_a
+      - com.example.orders.flaky.FixedTempFileTest.f13_fixedTempFile_b
+    note: "two sibling methods share ID F13"
+    category: filesystem
+    mechanism: "Both write/read/delete <tmpdir>/flaky-lab-order-export.csv"
+    expected_fail_rate: "0 when parallel=off; high when parallel=on"
+    triggering_condition: "JUnit parallel execution (matrix parallel=on)"
+  - id: F14
+    tests: [com.example.orders.flaky.NonIdempotentTest.f14_firstRunWritesMarker]
+    category: non_idempotent
+    mechanism: "Writes <flaky.state.dir>/f14.marker and asserts it did not exist before"
+    expected_fail_rate: "0 on a fresh workspace; 1.0 on a re-run/retry in the same workspace"
+    triggering_condition: "re-run of the same run in the same workspace (CI: cached state dir restored on attempt >= 2; local script: RERUN_PROB)"
+  - id: F15
+    tests: [com.example.orders.flaky.EnvironmentDependentTest.f15_expressShippingFlagIsEnabled]
+    category: environment
+    mechanism: "Asserts env FLAKY_LAB_EXPRESS_SHIPPING == 'enabled'"
+    expected_fail_rate: "0 on legs where the var is set (CI: salt=1); 1.0 on legs where unset (salt=2)"
+    triggering_condition: "matrix leg without the env var"
+
+decoys:
+  - id: D01
+    tests: [com.example.orders.decoy.D01BrokenTest.d01_alwaysFails]
+    category: always_failing
+    mechanism: "assertEquals(5, 2 + 2)"
+    expected_fail_rate: 1.0
+    triggering_condition: "always (every leg, every attempt)"
+    must_not_be_classified_as: flaky
+  - id: D02
+    tests: [com.example.orders.decoy.D02OrderTotalRegressionTest.d02_discountedOrderTotal]
+    category: real_regression
+    mechanism: "PricingService.totalCents charged tax on the pre-discount subtotal between the introduced and fixed commits"
+    expected_fail_rate: "1.0 for every run on commits in [introduced_commit, fixed_commit); 0 elsewhere"
+    triggering_condition: "code revision"
+    introduced_commit: "e159c1db7ae1fc8295834addb14be02b58794ffe"
+    fixed_commit: "7661aa28b9f9697993a95f18efa0c949047e24c4"
+    last_good_commit: "74ccb1424f132407ee5f569b30d32ab3a328a808"
+    must_not_be_classified_as: flaky
+  - id: D03
+    tests: [com.example.orders.decoy.D03SlowReportTest.d03_slowButDeterministic]
+    category: slow_deterministic
+    mechanism: "Job of 20 s, then asserts DONE; tagged 'slow'"
+    expected_fail_rate: 0.0
+    triggering_condition: "never fails (costs ~20 s CI time)"
+    must_not_be_classified_as: flaky
+  - id: D04
+    tests: [com.example.orders.decoy.D04DisabledTest.d04_disabled]
+    category: disabled
+    mechanism: "@Disabled; reported as skipped in JUnit XML"
+    expected_fail_rate: 0.0
+    triggering_condition: "never runs"
+    must_not_be_classified_as: flaky
+  - id: D05
+    tests: []
+    category: infra_outage
+    mechanism: >
+      Whole CI job fails in the 'Setup check' step (scripts/ci_setup.sh) before any test runs, so no JUnit XML
+      exists for that job. Triggered by workflow_dispatch input simulate_infra_outage=true, or by listing a UTC date
+      in ci/outage-dates.txt. Local fast path: OUTAGE_EVERY=K in scripts/run_suite_n_times.sh emits a run dir
+      with meta.json setup_failed=true and no XML.
+    expected_fail_rate: "1.0 of all jobs of the affected run (all legs at once)"
+    triggering_condition: "outage input or scheduled outage date"
+    must_not_be_classified_as: "test flakiness (infra-wide failure; no test-level signal)"
