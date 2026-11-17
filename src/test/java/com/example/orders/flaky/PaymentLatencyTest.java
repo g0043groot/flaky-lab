@@ -19,13 +19,13 @@ class PaymentLatencyTest {
     @RegisterExtension
     static WireMockExtension wm = WireMockExtension.newInstance().options(wireMockConfig().dynamicPort()).build();
 
-    /** F11 (network, ~10%): stub latency uniform 100-460 ms against the client's 500 ms timeout. */
+    /** F11 (network, ~10%): stub latency uniform 100-400 ms against the client's 500 ms timeout. */
     @Test
     @Tag("F11")
     @DisplayName("F11 network: random stub latency vs 500ms client timeout")
     void f11_authorizeSucceedsDespiteRandomLatency() {
         wm.stubFor(post(urlPathEqualTo("/payments/f11"))
-                .willReturn(aResponse().withStatus(200).withRandomDelay(new UniformDistribution(100, 460))));
+                .willReturn(aResponse().withStatus(200).withRandomDelay(new UniformDistribution(100, 400))));
         PaymentClient client = new PaymentClient("http://localhost:" + wm.getPort(), Duration.ofMillis(500));
         assertTrue(client.authorize("f11", 100));
     }

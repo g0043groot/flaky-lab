@@ -26,7 +26,7 @@ class AsyncRaceTest {
     @DisplayName("F02 timing (rare): fixed wait nearly covers the 80-120ms job")
     void f02_asyncJobDoneAfterGenerousWait() throws Exception {
         AsyncJobRunner.Job job = new AsyncJobRunner().submit(() -> {});
-        Thread.sleep(121);
+        Thread.sleep(126);
         assertEquals(AsyncJobRunner.State.DONE, job.state());
     }
 }

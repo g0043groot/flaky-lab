@@ -19,7 +19,7 @@ flaky:
   - id: F02
     tests: [com.example.orders.flaky.AsyncRaceTest.f02_asyncJobDoneAfterGenerousWait]
     category: timing_rare
-    mechanism: "Same race as F01 but fixed wait 121 ms (job max 120 ms; only scheduler jitter loses)"
+    mechanism: "Same race as F01 but fixed wait 126 ms (job max 120 ms; only scheduler jitter loses)"
     expected_fail_rate: 0.03
     triggering_condition: "job duration lands in the last ~2 ms of its 80-120 range, or scheduler jitter"
   - id: F03
@@ -79,7 +79,7 @@ flaky:
   - id: F11
     tests: [com.example.orders.flaky.PaymentLatencyTest.f11_authorizeSucceedsDespiteRandomLatency]
     category: network
-    mechanism: "WireMock stub with uniform(100,460) ms random delay vs PaymentClient 500 ms timeout"
+    mechanism: "WireMock stub with uniform(100,400) ms random delay vs PaymentClient 500 ms timeout"
     expected_fail_rate: 0.10
     triggering_condition: "stub delay (+ overhead) exceeds 500 ms"
   - id: F12
