@@ -18,9 +18,9 @@ public class PricingService {
         return (taxableCents * TAX_PERCENT + 50) / 100;
     }
 
-    /** Total = subtotal - discount + tax. */
+    /** Subtotal - discount + tax on the discounted amount. */
     public long totalCents(long subtotalCents) {
         long discounted = subtotalCents - discountCents(subtotalCents);
-        return discounted + taxCents(subtotalCents);
+        return discounted + taxCents(discounted);
     }
 }
