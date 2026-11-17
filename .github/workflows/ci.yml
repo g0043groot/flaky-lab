@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      simulate_infra_outage:
+        description: "D05: make every job fail during setup, before any test runs"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write   # actions/cache save for the F14 re-run workspace state
+
+jobs:
+  test:
+    name: test (salt=${{ matrix.salt }}, tz=${{ matrix.tz }}, parallel=${{ matrix.parallel }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Random-order seed = run_number * 10 + salt, so each run shuffles differently but legs differ.
+        salt: [1, 2]
+        tz: [UTC, Asia/Kolkata, America/New_York]
+        parallel: [false, true]
+    env:
+      TZ: ${{ matrix.tz }}
+      # F15: set on only some matrix legs (salt=1); the other legs leave it unset.
+      FLAKY_LAB_EXPRESS_SHIPPING: ${{ matrix.salt == 1 && 'enabled' || '' }}
+      SEED: ${{ github.run_number }}${{ matrix.salt }}
+      LEG: salt${{ matrix.salt }}-${{ matrix.tz == 'UTC' && 'UTC' || matrix.tz == 'Asia/Kolkata' && 'Kolkata' || 'NewYork' }}-parallel-${{ matrix.parallel && 'on' || 'off' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # D05: infra-outage simulation. Fails the job here, before any test, when the workflow input
+      # is set or today's date is in ci/outage-dates.txt.
+      - name: Setup check (infra outage simulation)
+        env:
+          SIMULATE_INFRA_OUTAGE: ${{ inputs.simulate_infra_outage }}
+        run: scripts/ci_setup.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # F14: persist the workspace state dir across *re-run attempts* of the same run+leg, so a re-run
+      # of a green job (e.g. via `gh run rerun`) sees state left by attempt 1 and fails.
+      - name: Restore workspace state (F14)
+        uses: actions/cache/restore@v4
+        with:
+          path: .flaky-state
+          key: flaky-state-${{ github.run_id }}-${{ env.LEG }}
+
+      - name: Test
+        run: >
+          mvn -B -ntp test
+          -Dtest.seed=${{ env.SEED }}
+          -Dtest.tz=${{ matrix.tz }}
+          -Dtest.parallel=${{ matrix.parallel }}
+          -Dmaven.test.failure.ignore=true
+
+      - name: Save workspace state (F14)
+        if: always()
+        uses: actions/cache/save@v4
+        continue-on-error: true   # key already exists on re-run attempts
+        with:
+          path: .flaky-state
+          key: flaky-state-${{ github.run_id }}-${{ env.LEG }}
+
+      - name: Fail job if any test failed
+        # Failing tests must turn the job red (so the platform sees failed jobs) but only after XML is saved.
+        if: always()
+        run: |
+          if grep -lE '<(failure|error)' target/surefire-reports/TEST-*.xml >/dev/null 2>&1; then
+            echo "Test failures present"; exit 1
+          fi
+
+      - name: Upload JUnit XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ env.LEG }}-attempt${{ github.run_attempt }}
+          path: target/surefire-reports/TEST-*.xml
+          if-no-files-found: ignore
+          retention-days: 30

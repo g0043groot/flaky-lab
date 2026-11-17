@@ -1,0 +1,3 @@
+# D05 scheduled-day switch: one UTC date (YYYY-MM-DD) per line.
+# On these days scripts/ci_setup.sh fails every CI job before tests start (simulated infra outage).
+# Lines starting with '#' are ignored. Add dates here (and commit) to inject outage days into CI history.
