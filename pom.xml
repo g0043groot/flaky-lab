@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.example</groupId>
+  <artifactId>flaky-lab</artifactId>
+  <version>0.1.0</version>
+  <name>flaky-lab</name>
+  <description>Order service with planted flaky tests (answer key: ground-truth.yaml)</description>
+
+  <properties>
+    <java.version>21</java.version>
+
+    <!-- ===== Test-run knobs (override with -Dname=value) ===== -->
+    <!-- Seed for random class/method order (JUnit orderers + surefire runOrder) -->
+    <test.seed>1</test.seed>
+    <!-- random | filesystem (surefire class order) -->
+    <test.runOrder>random</test.runOrder>
+    <test.methodOrderer>org.junit.jupiter.api.MethodOrderer$Random</test.methodOrderer>
+    <test.classOrderer>org.junit.jupiter.api.ClassOrderer$Random</test.classOrderer>
+    <!-- JUnit parallel execution: true | false -->
+    <test.parallel>false</test.parallel>
+    <!-- JVM default timezone -->
+    <test.tz>UTC</test.tz>
+    <!-- JUnit tag expression to exclude, e.g. -Dtest.excludedGroups=slow (D03 takes ~20s) -->
+    <test.excludedGroups>none-excluded</test.excludedGroups>
+    <!-- Directory where F14 leaves state (a re-run in the same workspace fails) -->
+    <flaky.state.dir>${project.basedir}/.flaky-state</flaky.state.dir>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.wiremock</groupId>
+      <artifactId>wiremock-standalone</artifactId>
+      <version>3.9.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <runOrder>${test.runOrder}</runOrder>
+          <runOrderRandomSeed>${test.seed}</runOrderRandomSeed>
+          <excludedGroups>${test.excludedGroups}</excludedGroups>
+          <argLine>-Duser.timezone=${test.tz} -Duser.language=en -Duser.country=US</argLine>
+          <systemPropertyVariables>
+            <flaky.state.dir>${flaky.state.dir}</flaky.state.dir>
+            <!-- JUnit Platform configuration parameters (also read from system properties) -->
+            <junit.jupiter.testmethod.order.default>${test.methodOrderer}</junit.jupiter.testmethod.order.default>
+            <junit.jupiter.testclass.order.default>${test.classOrderer}</junit.jupiter.testclass.order.default>
+            <junit.jupiter.execution.order.random.seed>${test.seed}</junit.jupiter.execution.order.random.seed>
+            <junit.jupiter.execution.parallel.enabled>${test.parallel}</junit.jupiter.execution.parallel.enabled>
+            <junit.jupiter.execution.parallel.mode.default>concurrent</junit.jupiter.execution.parallel.mode.default>
+            <junit.jupiter.execution.parallel.mode.classes.default>concurrent</junit.jupiter.execution.parallel.mode.classes.default>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
