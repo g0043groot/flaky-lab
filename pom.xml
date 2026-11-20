@@ -27,6 +27,10 @@
     <test.classOrderer>org.junit.jupiter.api.ClassOrderer$Random</test.classOrderer>
     <!-- JUnit parallel execution: true | false -->
     <test.parallel>false</test.parallel>
+    <!-- Thread pool for parallel mode. JUnit's default is one thread per CPU, which on a 4-core CI runner is
+         so saturated by parallel classes that F12/F13's sibling methods almost never overlap (measured: F12
+         collided in 1 of 59 CI parallel runs). A fixed pool larger than the core count restores the overlap. -->
+    <test.parallelism>16</test.parallelism>
     <!-- JVM default timezone -->
     <test.tz>UTC</test.tz>
     <!-- JUnit tag expression to exclude, e.g. -Dtest.excludedGroups=slow (D03 takes ~20s) -->
@@ -74,6 +78,9 @@
             <junit.jupiter.testclass.order.default>${test.classOrderer}</junit.jupiter.testclass.order.default>
             <junit.jupiter.execution.order.random.seed>${test.seed}</junit.jupiter.execution.order.random.seed>
             <junit.jupiter.execution.parallel.enabled>${test.parallel}</junit.jupiter.execution.parallel.enabled>
+            <junit.jupiter.execution.parallel.config.strategy>fixed</junit.jupiter.execution.parallel.config.strategy>
+            <junit.jupiter.execution.parallel.config.fixed.parallelism>${test.parallelism}</junit.jupiter.execution.parallel.config.fixed.parallelism>
+            <junit.jupiter.execution.parallel.config.fixed.max-pool-size>${test.parallelism}</junit.jupiter.execution.parallel.config.fixed.max-pool-size>
             <junit.jupiter.execution.parallel.mode.default>concurrent</junit.jupiter.execution.parallel.mode.default>
             <junit.jupiter.execution.parallel.mode.classes.default>concurrent</junit.jupiter.execution.parallel.mode.classes.default>
           </systemPropertyVariables>
