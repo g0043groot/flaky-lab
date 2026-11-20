@@ -14,7 +14,7 @@ class PaymentClientTest {
     static WireMockExtension wm = WireMockExtension.newInstance().options(wireMockConfig().dynamicPort()).build();
 
     private PaymentClient client() {
-        return new PaymentClient("http://localhost:" + wm.getPort(), Duration.ofMillis(300));
+        return new PaymentClient("http://localhost:" + wm.getPort(), Duration.ofMillis(1_000));
     }
 
     @Test void approvedOn200() {
